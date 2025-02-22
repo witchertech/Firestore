@@ -1,16 +1,11 @@
 package com.example.myapplication;
 
+import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
-
-import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
-import androidx.appcompat.app.AppCompatActivity;
-import android.os.Bundle;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -20,29 +15,37 @@ import android.widget.Spinner;
 import android.widget.Toast;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.FirebaseFirestoreSettings;
-
 import java.util.HashMap;
 import java.util.Map;
 
 public class MainActivity extends AppCompatActivity {
     private FirebaseFirestore db;
-    private DatabaseReference mDatabase;
+    private static final String PREFS_NAME = "UserPrefs";
+    private static final String KEY_PHONE = "phoneNumber";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Check if user is already logged in
+        SharedPreferences preferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        String savedPhone = preferences.getString(KEY_PHONE, null);
+        if (savedPhone != null) {
+            // User is already logged in, go to HomeActivity
+            Intent intent = new Intent(MainActivity.this, HomeActivity.class);
+            startActivity(intent);
+            finish();
+            return;
+        }
+
         setContentView(R.layout.activity_main);
 
-        // Initialize Firestore FIRST
+        // Initialize Firestore
         db = FirebaseFirestore.getInstance();
-
-        // Configure settings AFTER initialization
         FirebaseFirestoreSettings settings = new FirebaseFirestoreSettings.Builder()
                 .setPersistenceEnabled(true)
                 .build();
         db.setFirestoreSettings(settings);
-
-        db = FirebaseFirestore.getInstance();
 
         // Find the Spinner by ID
         Spinner stateSpinner = findViewById(R.id.state_spinner);
@@ -60,18 +63,14 @@ public class MainActivity extends AppCompatActivity {
         // Create an ArrayAdapter using the string array and a default spinner layout
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
                 android.R.layout.simple_spinner_item, indianStates);
-
-        // Specify the layout to use when the list of choices appears
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-
-        // Apply the adapter to the spinner
         stateSpinner.setAdapter(adapter);
 
-        // Set an item selected listener for the spinner
+        // Set Spinner item selection listener
         stateSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                if (position != 0) { // Ignore default option ("Select State")
+                if (position != 0) {
                     String selectedState = indianStates[position];
                     Toast.makeText(MainActivity.this,
                             "Selected State: " + selectedState, Toast.LENGTH_SHORT).show();
@@ -83,6 +82,7 @@ public class MainActivity extends AppCompatActivity {
                 // Do nothing
             }
         });
+
         Button submitButton = findViewById(R.id.submit_button);
         submitButton.setOnClickListener(v -> saveUserData());
     }
@@ -106,15 +106,22 @@ public class MainActivity extends AppCompatActivity {
         user.put("phoneNumber", phone);
         user.put("state", state);
 
-        // Add document with phone as ID
         db.collection("users").document(phone)
                 .set(user)
-                .addOnSuccessListener(aVoid ->
-                        Toast.makeText(MainActivity.this, "Data saved!", Toast.LENGTH_SHORT).show())
+                .addOnSuccessListener(aVoid -> {
+                    // Save phone number in SharedPreferences for session persistence
+                    SharedPreferences.Editor editor = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
+                    editor.putString(KEY_PHONE, phone);
+                    editor.apply();
+
+                    Toast.makeText(MainActivity.this, "Data saved!", Toast.LENGTH_SHORT).show();
+
+                    // Navigate to HomeActivity
+                    Intent intent = new Intent(MainActivity.this, HomeActivity.class);
+                    startActivity(intent);
+                    finish(); // Close MainActivity
+                })
                 .addOnFailureListener(e ->
                         Toast.makeText(MainActivity.this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show());
     }
-
-
-
 }
